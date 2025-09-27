@@ -3,6 +3,8 @@ import requests
 import datetime
 import schedule
 import time
+import threading
+from flask import Flask
 
 # ====== Environment Variables ======
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -10,6 +12,13 @@ CHAT_ID = os.getenv("CHAT_ID")
 NEWS_API_KEY = os.getenv("NEWS_API_KEY")
 CRYPTO_NEWS_API_KEY = os.getenv("CRYPTO_NEWS_API_KEY")
 FNO_DATA_API_KEY = os.getenv("FNO_DATA_API_KEY")
+
+# ====== Flask App (for Render) ======
+app = Flask(__name__)
+
+@app.route("/")
+def home():
+    return "✅ Bot is running on Render!"
 
 # ====== Fetch Stock News ======
 def fetch_stock_news():
@@ -25,7 +34,7 @@ def fetch_crypto_news():
 
 # ====== Fetch F&O Data (placeholder) ======
 def fetch_fno_insights():
-    # Replace with real F&O API
+    # Replace with real F&O API later
     return [
         "Stock ABC: High open interest in calls",
         "Stock XYZ: F&O activity bullish",
@@ -62,7 +71,7 @@ def predict_from_news(stock_summaries, fno_data, crypto_summaries):
 # ====== Build Daily Message ======
 def build_message():
     today = datetime.date.today().strftime("%Y-%m-%d")
-    message = f"📈 **Daily Roundup for {today}**\n\n"
+    message = f"📈 Daily Roundup for {today}\n\n"
 
     # Stocks & F&O
     stock_articles = fetch_stock_news()
@@ -102,11 +111,21 @@ def job():
     msg = build_message()
     send_message(msg)
 
-# ====== Schedule Daily at 22:00 ======
-schedule.every().day.at("22:00").do(job)
+# ====== Scheduler Thread ======
+def run_scheduler():
+    schedule.every().day.at("22:00").do(job)
+    print("✅ Bot scheduler started. Will send daily summary at 22:00.")
+    while True:
+        schedule.run_pending()
+        time.sleep(60)
 
-print("✅ Bot scheduler started. Will send daily summary at 22:00.")
+# ====== Main ======
+if __name__ == "__main__":
+    # Start scheduler in a separate thread
+    t = threading.Thread(target=run_scheduler)
+    t.daemon = True
+    t.start()
 
-while True:
-    schedule.run_pending()
-    time.sleep(60)
+    # Start Flask to keep service alive on Render
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
